@@ -164,20 +164,21 @@ const FileList = ({
                           </ActionIcon>
                         </HoverTip>
                       )}
-                      {shareService.doesFileSupportPreview(file.name) && (
-                        <HoverTip label={t("common.button.preview")}>
-                          <ActionIcon
-                            color="green"
-                            variant="light"
-                            size={25}
-                            onClick={() =>
-                              showFilePreviewModal(share.id, file, modals)
-                            }
-                          >
-                            <TbEye />
-                          </ActionIcon>
-                        </HoverTip>
-                      )}
+                      {!share.encrypted &&
+                        shareService.doesFileSupportPreview(file.name) && (
+                          <HoverTip label={t("common.button.preview")}>
+                            <ActionIcon
+                              color="green"
+                              variant="light"
+                              size={25}
+                              onClick={() =>
+                                showFilePreviewModal(share.id, file, modals)
+                              }
+                            >
+                              <TbEye />
+                            </ActionIcon>
+                          </HoverTip>
+                        )}
                       {!share.hasPassword && (
                         <HoverTip label={t("common.button.copy-link")}>
                           <ActionIcon

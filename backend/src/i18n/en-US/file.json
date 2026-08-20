@@ -14,5 +14,8 @@
   "s3SessionNotFound": "Multipart upload session not found.",
   "s3UploadFailed": "Multipart upload failed. The upload has been aborted.",
   "s3SizeError": "Could not retrieve file size",
-  "s3NotSupported": "Pre-signed operations are only supported for S3 storage."
+  "s3NotSupported": "Pre-signed operations are only supported for S3 storage.",
+  "encryptionKeyRequired": "Enter the share password to access the encrypted files",
+  "encryptedNoZip": "Encrypted shares can't be downloaded as a ZIP archive",
+  "encryptedNoDirectUpload": "Encrypted shares can't be uploaded directly to S3"
 }

@@ -15,6 +15,7 @@ import { I18nService } from "nestjs-i18n";
 import { ClamScanService } from "src/clamscan/clamscan.service";
 import { ConfigService } from "src/config/config.service";
 import { EmailService } from "src/email/email.service";
+import { EncryptionService } from "src/file/encryption.service";
 import { FileService } from "src/file/file.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { ReverseShareService } from "src/reverseShare/reverseShare.service";
@@ -38,6 +39,7 @@ export class ShareService {
     private reverseShareService: ReverseShareService,
     private clamScanService: ClamScanService,
     private systemService: SystemService,
+    private encryptionService: EncryptionService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -85,6 +87,29 @@ export class ShareService {
     if (share.security?.restrictToRecipients && share.security?.password) {
       throw new BadRequestException(
         "Cannot set a password on a share restricted to recipients.",
+      );
+    }
+
+    if (share.encrypted && !share.security?.password) {
+      throw new BadRequestException(
+        this.i18n.t("share.encryptionRequiresPassword"),
+      );
+    }
+
+    let encryptionSalt: string;
+    let wrappedEncryptionKey: string;
+
+    if (share.encrypted) {
+      encryptionSalt = this.encryptionService.generateSalt();
+      // Derive the key while the password is still in plaintext, it gets replaced
+      // by its hash right below. Neither the password nor the key is ever stored.
+      const encryptionKey = await this.encryptionService.deriveKey(
+        share.security.password,
+        encryptionSalt,
+      );
+      wrappedEncryptionKey = this.encryptionService.wrapKey(
+        encryptionKey,
+        share.id,
       );
     }
 
@@ -144,6 +169,12 @@ export class ShareService {
             : [],
         },
         storageProvider: this.configService.get("s3.enabled") ? "S3" : "LOCAL",
+        encryptionSalt,
+        // Pinned per share: the config value can be changed by an admin at any time,
+        // which would break the chunk boundaries of already uploaded files.
+        encryptionChunkSize: share.encrypted
+          ? this.configService.get("share.chunkSize")
+          : undefined,
       },
     });
 
@@ -159,7 +190,7 @@ export class ShareService {
       });
     }
 
-    return shareTuple;
+    return { ...shareTuple, wrappedEncryptionKey };
   }
 
   async createZip(shareId: string) {
@@ -202,8 +233,9 @@ export class ShareService {
         this.i18n.t("share.completionRequiresFile"),
       );
 
-    // Asynchronously create a zip of all files
-    if (share.files.length > 1)
+    // Asynchronously create a zip of all files. Encrypted shares are excluded:
+    // the archive would have to be stored in plaintext.
+    if (share.files.length > 1 && !share.encrypted)
       this.createZip(id).then(() =>
         this.prisma.share.update({ where: { id }, data: { isZipReady: true } }),
       );
@@ -252,8 +284,9 @@ export class ShareService {
       );
     }
 
-    // Check if any file is malicious with ClamAV
-    void this.clamScanService.checkAndRemove(share.id);
+    // Check if any file is malicious with ClamAV. Encrypted files can't be scanned
+    // because the key is only available while the uploader is authenticated.
+    if (!share.encrypted) void this.clamScanService.checkAndRemove(share.id);
 
     if (share.reverseShare) {
       await this.prisma.reverseShare.update({
@@ -417,6 +450,17 @@ export class ShareService {
     });
 
     if (body.security) {
+      // The files are encrypted with a key derived from the password, so changing
+      // it would require re-encrypting everything.
+      if (
+        currentShare.encrypted &&
+        (body.security.password !== undefined || body.security.removePassword)
+      ) {
+        throw new BadRequestException(
+          this.i18n.t("share.encryptedPasswordLocked"),
+        );
+      }
+
       await this.updateSecurity(shareId, body, currentShare.security);
     }
 
@@ -577,8 +621,21 @@ export class ShareService {
     }
 
     const token = await this.generateShareToken(share);
+
+    let wrappedEncryptionKey: string;
+    if (share.encrypted) {
+      const encryptionKey = await this.encryptionService.deriveKey(
+        password,
+        share.encryptionSalt,
+      );
+      wrappedEncryptionKey = this.encryptionService.wrapKey(
+        encryptionKey,
+        share.id,
+      );
+    }
+
     await this.increaseViewCount(share);
-    return token;
+    return { token, wrappedEncryptionKey };
   }
 
   async generateShareToken(share: Share & { security?: ShareSecurity }) {

@@ -239,7 +239,7 @@ const Share = ({ shareId }: { shareId: string }) => {
               </ActionIcon>
             </HoverTip>
           )}
-          {share?.files.length > 1 && (
+          {share?.files.length > 1 && !share?.encrypted && (
             <DownloadAllButton shareId={shareId} recipientId={recipientId} />
           )}
         </Group>

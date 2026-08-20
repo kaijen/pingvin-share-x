@@ -106,6 +106,10 @@ model Share {
   userRecipients ShareUserRecipient[]
   files          File[]
   storageProvider String @default("LOCAL")
+
+  encrypted           Boolean @default(false)
+  encryptionSalt      String?
+  encryptionChunkSize Int?
 }
 
 model ReverseShare {

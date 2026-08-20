@@ -186,6 +186,8 @@ export default {
   "account.shares.modal.edit.password.keep":
     "Leave blank to keep the current password",
   "account.shares.modal.edit.password.remove": "Remove password protection",
+  "account.shares.modal.edit.password.encrypted":
+    "The files of this share are encrypted with a key derived from its password. The password can't be changed.",
 
   "account.shares.modal.delete.title": "Delete share: {share}",
   "account.shares.modal.delete.description":
@@ -413,6 +415,9 @@ export default {
   "upload.modal.accordion.security.password.placeholder": "No password",
   "upload.modal.accordion.security.max-views.label": "Maximum views",
   "upload.modal.accordion.security.max-views.placeholder": "No limit",
+  "upload.modal.accordion.security.encrypt.label": "Encrypt files",
+  "upload.modal.accordion.security.encrypt.description":
+    "Store the files encrypted with AES-256. The key is derived from the password and never stored, so the password can't be changed or recovered afterwards. Previews and ZIP downloads are not available for encrypted shares.",
 
   // showCompletedUploadModal.tsx
   "upload.modal.completed.never-expires": "This share will never expire.",

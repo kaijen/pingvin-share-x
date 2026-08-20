@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import {
+  IsBoolean,
   IsEmail,
   IsNumber,
   IsOptional,
@@ -41,4 +42,8 @@ export class CreateShareDTO {
   @IsNumber()
   @IsOptional()
   size: number;
+
+  @IsBoolean()
+  @IsOptional()
+  encrypted: boolean;
 }

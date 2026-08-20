@@ -18,12 +18,14 @@ import { getUserActiveStorageUsage } from "src/utils/storageQuota.util";
 import { validate as isValidUUID } from "uuid";
 import { SHARE_DIRECTORY } from "../constants";
 import { Readable } from "stream";
+import { CHUNK_OVERHEAD, EncryptionService } from "./encryption.service";
 
 @Injectable()
 export class LocalFileService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private encryptionService: EncryptionService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -32,6 +34,7 @@ export class LocalFileService {
     chunk: { index: number; total: number },
     file: { id?: string; name: string },
     shareId: string,
+    wrappedEncryptionKey?: string,
   ) {
     if (!file.id) {
       file.id = crypto.randomUUID();
@@ -51,6 +54,10 @@ export class LocalFileService {
     if (share.uploadLocked)
       throw new BadRequestException(this.i18n.t("file.alreadyCompleted"));
 
+    const encryptionKey = share.encrypted
+      ? this.encryptionService.unwrapKey(wrappedEncryptionKey, shareId)
+      : undefined;
+
     let diskFileSize: number;
     try {
       diskFileSize = (
@@ -60,8 +67,11 @@ export class LocalFileService {
       diskFileSize = 0;
     }
 
-    // If the sent chunk index and the expected chunk index doesn't match throw an error
-    const chunkSize = this.config.get("share.chunkSize");
+    // If the sent chunk index and the expected chunk index doesn't match throw an error.
+    // Encrypted chunks are stored with a fixed overhead on top of the plaintext chunk.
+    const chunkSize = share.encrypted
+      ? share.encryptionChunkSize + CHUNK_OVERHEAD
+      : this.config.get("share.chunkSize");
     const expectedChunkIndex = Math.ceil(diskFileSize / chunkSize);
 
     if (expectedChunkIndex != chunk.index)
@@ -138,7 +148,15 @@ export class LocalFileService {
 
     await fs.appendFile(
       `${SHARE_DIRECTORY}/${shareId}/${file.id}.tmp-chunk`,
-      buffer,
+      encryptionKey
+        ? this.encryptionService.encryptChunk(
+            encryptionKey,
+            buffer,
+            file.id,
+            chunk.index,
+            chunk.total,
+          )
+        : buffer,
     );
 
     const isLastChunk = chunk.index == chunk.total - 1;
@@ -147,9 +165,16 @@ export class LocalFileService {
         `${SHARE_DIRECTORY}/${shareId}/${file.id}.tmp-chunk`,
         `${SHARE_DIRECTORY}/${shareId}/${file.id}`,
       );
-      const fileSize = (
+      const storedFileSize = (
         await fs.stat(`${SHARE_DIRECTORY}/${shareId}/${file.id}`)
       ).size;
+      // Always store the size of the file itself, not the size it takes up on disk
+      const fileSize = share.encrypted
+        ? this.encryptionService.getPlaintextSize(
+            storedFileSize,
+            share.encryptionChunkSize,
+          )
+        : storedFileSize;
       await this.prisma.file.create({
         data: {
           id: file.id,

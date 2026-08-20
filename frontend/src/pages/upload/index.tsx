@@ -8,6 +8,7 @@ import { FormattedMessage } from "react-intl";
 import Meta from "../../components/Meta";
 import Dropzone from "../../components/upload/Dropzone";
 import FileList from "../../components/upload/FileList";
+import requestEncryptionKey from "../../components/share/requestEncryptionKey";
 import showCompletedUploadModal from "../../components/upload/modals/showCompletedUploadModal";
 import showCreateUploadModal from "../../components/upload/modals/showCreateUploadModal";
 import useConfig from "../../hooks/config.hook";
@@ -143,6 +144,14 @@ const Upload = ({
             ) {
               // Retry with the expected chunk index
               chunkIndex = e.response!.data!.expectedChunkIndex - 1;
+              continue;
+            } else if (
+              e instanceof AxiosError &&
+              e.response?.data.error == "share_encryption_key_required"
+            ) {
+              // Ask for the password again, then retry the same chunk
+              await requestEncryptionKey(modals, createdShare.id);
+              chunkIndex--;
               continue;
             } else {
               setFileProgress(-1);

@@ -343,23 +343,31 @@ const EditShareBody = ({
           />
         )}
         <Divider />
-        <PasswordInput
-          variant="filled"
-          label={t("upload.modal.accordion.security.password.label")}
-          placeholder={
-            security.passwordProtected
-              ? t("account.shares.modal.edit.password.keep")
-              : t("upload.modal.accordion.security.password.placeholder")
-          }
-          autoComplete="new-password"
-          disabled={form.values.removePassword}
-          {...form.getInputProps("password")}
-        />
-        {security.passwordProtected && (
-          <Checkbox
-            label={t("account.shares.modal.edit.password.remove")}
-            {...form.getInputProps("removePassword", { type: "checkbox" })}
-          />
+        {share.encrypted ? (
+          <Text size="xs" color="dimmed">
+            <FormattedMessage id="account.shares.modal.edit.password.encrypted" />
+          </Text>
+        ) : (
+          <>
+            <PasswordInput
+              variant="filled"
+              label={t("upload.modal.accordion.security.password.label")}
+              placeholder={
+                security.passwordProtected
+                  ? t("account.shares.modal.edit.password.keep")
+                  : t("upload.modal.accordion.security.password.placeholder")
+              }
+              autoComplete="new-password"
+              disabled={form.values.removePassword}
+              {...form.getInputProps("password")}
+            />
+            {security.passwordProtected && (
+              <Checkbox
+                label={t("account.shares.modal.edit.password.remove")}
+                {...form.getInputProps("removePassword", { type: "checkbox" })}
+              />
+            )}
+          </>
         )}
         <NumberInput
           min={1}

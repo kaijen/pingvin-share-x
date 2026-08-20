@@ -1,10 +1,12 @@
 import { Button, Group } from "@mantine/core";
+import { useModals } from "@mantine/modals";
 import { cleanNotifications } from "@mantine/notifications";
 import { AxiosError } from "axios";
 import { useRouter } from "next/router";
 import pLimit from "p-limit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FormattedMessage } from "react-intl";
+import requestEncryptionKey from "../../components/share/requestEncryptionKey";
 import Dropzone from "../../components/upload/Dropzone";
 import FileList from "../../components/upload/FileList";
 import useConfig from "../../hooks/config.hook";
@@ -33,6 +35,7 @@ const EditableUpload = ({
 }) => {
   const t = useTranslate();
   const router = useRouter();
+  const modals = useModals();
   const config = useConfig();
   const { user } = useUser();
 
@@ -130,6 +133,14 @@ const EditableUpload = ({
             ) {
               // Retry with the expected chunk index
               chunkIndex = e.response!.data!.expectedChunkIndex - 1;
+              continue;
+            } else if (
+              e instanceof AxiosError &&
+              e.response?.data.error == "share_encryption_key_required"
+            ) {
+              // Ask for the password again, then retry the same chunk
+              await requestEncryptionKey(modals, shareId);
+              chunkIndex--;
               continue;
             } else {
               setFileProgress(-1);

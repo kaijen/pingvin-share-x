@@ -6,13 +6,14 @@ import {
   Param,
   Post,
   Query,
+  Req,
   Res,
   StreamableFile,
   UseGuards,
 } from "@nestjs/common";
 import { SkipThrottle } from "@nestjs/throttler";
 import * as contentDisposition from "content-disposition";
-import { Response } from "express";
+import { Request, Response } from "express";
 import { CreateShareGuard } from "src/share/guard/createShare.guard";
 import { StrictShareOwnerGuard } from "src/share/guard/strictShareOwner.guard";
 import { IdValidation } from "src/share/guard/shareIdValidation.guard";
@@ -25,6 +26,10 @@ const VALID_ID_REGEX = /^[a-zA-Z0-9-]*={0,2}$/;
 function getValidRecipientId(recipientId?: string): string | undefined {
   if (!recipientId) return undefined;
   return VALID_ID_REGEX.test(recipientId) ? recipientId : undefined;
+}
+
+function getWrappedEncryptionKey(request: Request, shareId: string) {
+  return request.cookies[`share_${shareId}_enc`];
 }
 
 @Controller("shares/:shareId/files")
@@ -103,6 +108,7 @@ export class FileController {
     },
     @Body() body: string,
     @Param("shareId") shareId: string,
+    @Req() request: Request,
   ) {
     const { id, name, chunkIndex, totalChunks } = query;
 
@@ -112,6 +118,7 @@ export class FileController {
       { index: parseInt(chunkIndex), total: parseInt(totalChunks) },
       { id, name },
       shareId,
+      getWrappedEncryptionKey(request, shareId),
     );
   }
 
@@ -142,15 +149,18 @@ export class FileController {
   @UseGuards(FileSecurityGuard)
   async getFile(
     @Res({ passthrough: true }) res: Response,
+    @Req() request: Request,
     @Param("shareId") shareId: string,
     @Param("fileId") fileId: string,
     @Query("download") download = "true",
     @Query("recipient") recipientId?: string,
   ) {
     const isDownload = download === "true";
-    const storageProvider = await this.fileService.getStorageProvider(shareId);
+    const { storageProvider, encrypted } =
+      await this.fileService.getShareStorageInfo(shareId);
 
-    if (storageProvider === "S3") {
+    // Encrypted files always have to be streamed through the backend to be decrypted
+    if (storageProvider === "S3" && !encrypted) {
       const url = await this.fileService.getPreSignedDownloadUrl(
         shareId,
         fileId,
@@ -168,7 +178,11 @@ export class FileController {
       return;
     }
 
-    const file = await this.fileService.get(shareId, fileId);
+    const file = await this.fileService.get(
+      shareId,
+      fileId,
+      getWrappedEncryptionKey(request, shareId),
+    );
 
     const headers = {
       "Content-Type":

@@ -7,10 +7,11 @@ import {
 } from "@nestjs/common";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Cache } from "cache-manager";
+import { EncryptionService } from "./encryption.service";
 import { LocalFileService } from "./local.service";
 import { S3FileService } from "./s3.service";
 import { ConfigService } from "src/config/config.service";
-import { Readable } from "stream";
+import { pipeline, Readable } from "stream";
 import { PrismaService } from "../prisma/prisma.service";
 import { EmailService } from "src/email/email.service";
 import { I18nService } from "nestjs-i18n";
@@ -26,6 +27,7 @@ export class FileService {
     private s3FileService: S3FileService,
     private configService: ConfigService,
     private emailService: EmailService,
+    private encryptionService: EncryptionService,
     private readonly i18n: I18nService,
     @Inject(CACHE_MANAGER) private cache: Cache,
   ) {}
@@ -53,10 +55,17 @@ export class FileService {
       name: string;
     },
     shareId: string,
+    wrappedEncryptionKey?: string,
   ) {
     await this.touchShare(shareId);
     const storageService = this.getStorageService();
-    return storageService.create(data, chunk, file, shareId);
+    return storageService.create(
+      data,
+      chunk,
+      file,
+      shareId,
+      wrappedEncryptionKey,
+    );
   }
 
   private async touchShare(shareId: string) {
@@ -84,9 +93,10 @@ export class FileService {
     await this.touchShare(shareId);
     const share = await this.prisma.share.findFirst({
       where: { id: shareId },
-      select: { storageProvider: true },
+      select: { storageProvider: true, encrypted: true },
     });
-    if (share?.storageProvider !== "S3") {
+    // Encrypted shares have to be proxied so the chunks can be encrypted on the way
+    if (share?.storageProvider !== "S3" || share.encrypted) {
       return { directToS3: false };
     }
     const res = await this.s3FileService.createPreSignedUploadUrls(
@@ -107,10 +117,15 @@ export class FileService {
     await this.touchShare(shareId);
     const share = await this.prisma.share.findFirst({
       where: { id: shareId },
-      select: { storageProvider: true },
+      select: { storageProvider: true, encrypted: true },
     });
     if (share?.storageProvider !== "S3") {
       throw new BadRequestException(this.i18n.t("file.s3NotSupported"));
+    }
+    if (share.encrypted) {
+      throw new BadRequestException(
+        this.i18n.t("file.encryptedNoDirectUpload"),
+      );
     }
     return this.s3FileService.completePreSignedUpload(
       shareId,
@@ -155,12 +170,47 @@ export class FileService {
     );
   }
 
-  async get(shareId: string, fileId: string): Promise<File> {
+  async get(
+    shareId: string,
+    fileId: string,
+    wrappedEncryptionKey?: string,
+  ): Promise<File> {
     const share = await this.prisma.share.findFirst({
       where: { id: shareId },
     });
     const storageService = this.getStorageService(share.storageProvider);
-    return storageService.get(shareId, fileId);
+    const file = await storageService.get(shareId, fileId);
+
+    if (!share.encrypted) return file;
+
+    const key = this.encryptionService.unwrapKey(wrappedEncryptionKey, shareId);
+
+    // The stored object is larger than the file itself, so the size always has to
+    // come from the database instead of from the storage provider.
+    const { size } = await this.prisma.file.findUnique({
+      where: { id: fileId },
+      select: { size: true },
+    });
+
+    const decryptionStream = this.encryptionService.createDecryptionStream(
+      key,
+      fileId,
+      parseInt(size),
+      share.encryptionChunkSize,
+    );
+
+    pipeline(file.file, decryptionStream, (error) => {
+      if (error)
+        this.logger.error(
+          `Failed to decrypt file ${fileId} of share ${shareId}`,
+          error.stack,
+        );
+    });
+
+    return {
+      metaData: { ...file.metaData, size },
+      file: decryptionStream,
+    };
   }
 
   async remove(shareId: string, fileId: string) {
@@ -184,8 +234,11 @@ export class FileService {
   async getZip(shareId: string): Promise<Readable> {
     const share = await this.prisma.share.findFirst({
       where: { id: shareId },
-      select: { storageProvider: true },
+      select: { storageProvider: true, encrypted: true },
     });
+    if (share?.encrypted) {
+      throw new BadRequestException(this.i18n.t("file.encryptedNoZip"));
+    }
     const storageService = this.getStorageService(share?.storageProvider);
     return await storageService.getZip(shareId);
   }
@@ -242,12 +295,15 @@ export class FileService {
     }
   }
 
-  async getStorageProvider(shareId: string): Promise<string> {
+  async getShareStorageInfo(shareId: string) {
     const share = await this.prisma.share.findFirst({
       where: { id: shareId },
-      select: { storageProvider: true },
+      select: { storageProvider: true, encrypted: true },
     });
-    return share?.storageProvider || "LOCAL";
+    return {
+      storageProvider: share?.storageProvider || "LOCAL",
+      encrypted: share?.encrypted ?? false,
+    };
   }
 
   async getFileName(shareId: string, fileId: string): Promise<string> {

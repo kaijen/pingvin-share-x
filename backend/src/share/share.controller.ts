@@ -90,12 +90,24 @@ export class ShareController {
   async create(
     @Body() body: CreateShareDTO,
     @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
     @GetUser() user: User,
   ) {
     const { reverse_share_token } = request.cookies;
-    return new ShareDTO().from(
-      await this.shareService.create(body, user, reverse_share_token),
+    const share = await this.shareService.create(
+      body,
+      user,
+      reverse_share_token,
     );
+
+    if (share.wrappedEncryptionKey)
+      this.setEncryptionKeyCookie(
+        response,
+        share.id,
+        share.wrappedEncryptionKey,
+      );
+
+    return new ShareDTO().from(share);
   }
 
   @Patch(":id")
@@ -167,7 +179,8 @@ export class ShareController {
     @Res({ passthrough: true }) response: Response,
     @Body() body: SharePasswordDto,
   ) {
-    const token = await this.shareService.getShareToken(id, body.password);
+    const { token, wrappedEncryptionKey } =
+      await this.shareService.getShareToken(id, body.password);
 
     this.clearShareTokenCookies(request, response);
     response.cookie(`share_${id}_token`, token, {
@@ -175,7 +188,26 @@ export class ShareController {
       httpOnly: true,
     });
 
+    if (wrappedEncryptionKey)
+      this.setEncryptionKeyCookie(response, id, wrappedEncryptionKey);
+
     return { token };
+  }
+
+  /**
+   * The encryption key of a share is never stored server side. It's derived from the
+   * share password and handed back to the client wrapped in a cookie, so that upload
+   * and download requests can carry it without the password being sent again.
+   */
+  private setEncryptionKeyCookie(
+    response: Response,
+    shareId: string,
+    wrappedEncryptionKey: string,
+  ) {
+    response.cookie(`share_${shareId}_enc`, wrappedEncryptionKey, {
+      path: "/",
+      httpOnly: true,
+    });
   }
 
   /**
@@ -196,13 +228,18 @@ export class ShareController {
       (cookie) => cookie.payload.exp >= moment().unix(),
     );
 
-    expiredTokens.forEach((cookie) => response.clearCookie(cookie.key));
+    const clearShareCookies = (cookie: { key: string }) => {
+      response.clearCookie(cookie.key);
+      response.clearCookie(cookie.key.replace(/_token$/, "_enc"));
+    };
+
+    expiredTokens.forEach(clearShareCookies);
 
     if (validTokens.length > 10) {
       validTokens
         .sort((a, b) => a.payload.exp - b.payload.exp)
         .slice(0, -10)
-        .forEach((cookie) => response.clearCookie(cookie.key));
+        .forEach(clearShareCookies);
     }
   }
 }

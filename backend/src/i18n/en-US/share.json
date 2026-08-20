@@ -15,5 +15,7 @@
   "tokenRequired": "Share token required",
   "privateShare": "Only reverse share creator can access this share",
   "maxViewsExceeded": "Maximum views exceeded",
-  "restrictedToRecipients": "This share is restricted to specific recipients. Please log in to access it."
+  "restrictedToRecipients": "This share is restricted to specific recipients. Please log in to access it.",
+  "encryptionRequiresPassword": "Encrypted shares must be protected with a password",
+  "encryptedPasswordLocked": "The password of an encrypted share can't be changed"
 }

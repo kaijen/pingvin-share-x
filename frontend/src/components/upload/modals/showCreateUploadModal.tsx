@@ -167,15 +167,19 @@ const CreateUploadModalBody = ({
       expiration_unit: `-${defaultTimespan.unit}` as string,
       never_expires: false,
       restrictToRecipients: false,
+      encrypted: false,
     },
     validate: yupResolver(validationSchema),
   });
+
+  const passwordInputProps = form.getInputProps("password");
 
   const handleRestrictToggle = (checked: boolean) => {
     form.setFieldValue("restrictToRecipients", checked);
     if (checked) {
       // A share can't be both password-protected and restricted to recipients.
       form.setFieldValue("password", undefined);
+      form.setFieldValue("encrypted", false);
     }
   };
 
@@ -230,6 +234,7 @@ const CreateUploadModalBody = ({
             maxViews: values.maxViews || undefined,
             restrictToRecipients: values.restrictToRecipients || undefined,
           },
+          encrypted: values.encrypted || undefined,
         },
         files,
       );
@@ -453,17 +458,38 @@ const CreateUploadModalBody = ({
               <Accordion.Panel>
                 <Stack align="stretch">
                   {!form.values.restrictToRecipients && (
-                    <PasswordInput
-                      variant="filled"
-                      placeholder={t(
-                        "upload.modal.accordion.security.password.placeholder",
-                      )}
-                      label={t(
-                        "upload.modal.accordion.security.password.label",
-                      )}
-                      autoComplete="new-password"
-                      {...form.getInputProps("password")}
-                    />
+                    <>
+                      <PasswordInput
+                        variant="filled"
+                        placeholder={t(
+                          "upload.modal.accordion.security.password.placeholder",
+                        )}
+                        label={t(
+                          "upload.modal.accordion.security.password.label",
+                        )}
+                        autoComplete="new-password"
+                        {...passwordInputProps}
+                        onChange={(event) => {
+                          passwordInputProps.onChange(event);
+                          // The encryption key is derived from the password,
+                          // so it can't be kept without one
+                          if (!event.currentTarget.value)
+                            form.setFieldValue("encrypted", false);
+                        }}
+                      />
+                      <Checkbox
+                        label={t(
+                          "upload.modal.accordion.security.encrypt.label",
+                        )}
+                        description={t(
+                          "upload.modal.accordion.security.encrypt.description",
+                        )}
+                        disabled={!form.values.password}
+                        {...form.getInputProps("encrypted", {
+                          type: "checkbox",
+                        })}
+                      />
+                    </>
                   )}
                   <NumberInput
                     min={1}

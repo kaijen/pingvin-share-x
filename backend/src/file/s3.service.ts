@@ -31,6 +31,7 @@ import { File } from "./file.service";
 import { Readable } from "stream";
 import { validate as isValidUUID } from "uuid";
 import * as archiver from "archiver";
+import { EncryptionService } from "./encryption.service";
 
 @Injectable()
 export class S3FileService {
@@ -48,6 +49,7 @@ export class S3FileService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private encryptionService: EncryptionService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -56,6 +58,7 @@ export class S3FileService {
     chunk: { index: number; total: number },
     file: { id?: string; name: string },
     shareId: string,
+    wrappedEncryptionKey?: string,
   ) {
     if (!file.id) {
       file.id = crypto.randomUUID();
@@ -74,6 +77,16 @@ export class S3FileService {
         reverseShare: { include: { creator: true } },
       },
     });
+
+    const body = share.encrypted
+      ? this.encryptionService.encryptChunk(
+          this.encryptionService.unwrapKey(wrappedEncryptionKey, shareId),
+          buffer,
+          file.id,
+          chunk.index,
+          chunk.total,
+        )
+      : buffer;
 
     try {
       // Initialize multipart upload if it's the first chunk
@@ -150,7 +163,7 @@ export class S3FileService {
           Key: key,
           PartNumber: partNumber,
           UploadId: uploadId,
-          Body: buffer,
+          Body: body,
         }),
       );
 
@@ -200,7 +213,14 @@ export class S3FileService {
 
     const isLastChunk = chunk.index == chunk.total - 1;
     if (isLastChunk) {
-      const fileSize: number = await this.getFileSize(shareId, file.name);
+      const storedFileSize: number = await this.getFileSize(shareId, file.name);
+      // Always store the size of the file itself, not the size of the stored object
+      const fileSize = share.encrypted
+        ? this.encryptionService.getPlaintextSize(
+            storedFileSize,
+            share.encryptionChunkSize,
+          )
+        : storedFileSize;
 
       await this.prisma.file.create({
         data: {

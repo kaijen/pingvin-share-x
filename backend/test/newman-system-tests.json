@@ -432,7 +432,7 @@
 											"    const responseBody = pm.response.json();",
 											"    pm.expect(responseBody).to.have.property(\"id\")",
 											"    pm.expect(responseBody).to.have.property(\"expiration\")",
-											"    pm.expect(Object.keys(responseBody).length).be.equal(4)",
+											"    pm.expect(Object.keys(responseBody).length).be.equal(5)",
 											"});",
 											""
 										],
@@ -626,7 +626,7 @@
 											"    const responseBody = pm.response.json();",
 											"    pm.expect(responseBody).to.have.property(\"id\")",
 											"    pm.expect(responseBody).to.have.property(\"expiration\")",
-											"    pm.expect(Object.keys(responseBody).length).be.equal(4)",
+											"    pm.expect(Object.keys(responseBody).length).be.equal(5)",
 											"});",
 											""
 										],
@@ -1233,6 +1233,397 @@
 					]
 				}
 			]
+		},
+		{
+			"name": "Encrypted Share",
+			"item": [
+				{
+					"name": "Positive",
+					"item": [
+						{
+							"name": "Create encrypted share",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", () => {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Share is flagged as encrypted\", () => {",
+											"    pm.expect(pm.response.json().encrypted).to.be.true;",
+											"});",
+											"",
+											"pm.test(\"Wrapped encryption key cookie is set\", () => {",
+											"    pm.expect(pm.cookies.has(\"share_encrypted-share_enc\")).to.be.true;",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"id\": \"encrypted-share\",\n    \"expiration\": \"1-day\",\n    \"recipients\": [],\n    \"security\": {\n        \"password\": \"share-password\"\n    },\n    \"encrypted\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Upload file",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", () => {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.collectionVariables.set(\"encryptedFileId\", pm.response.json().id);"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"protocolProfileBehavior": {
+								"disabledSystemHeaders": {
+									"content-type": true
+								}
+							},
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/octet-stream",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "data:application/octet-stream;base64,VGhpcyBpcyBhIHRlc3QgZmlsZWQgdXNlZCBmb3IgdXBsb2FkaW5nIGluIHRoZSBzeXN0ZW0gdGVzdC4="
+								},
+								"url": {
+									"raw": "{{API_URL}}/shares/:shareId/files?name=secret.txt&chunkIndex=0&totalChunks=1",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares",
+										":shareId",
+										"files"
+									],
+									"query": [
+										{
+											"key": "name",
+											"value": "secret.txt"
+										},
+										{
+											"key": "chunkIndex",
+											"value": "0"
+										},
+										{
+											"key": "totalChunks",
+											"value": "1"
+										}
+									],
+									"variable": [
+										{
+											"key": "shareId",
+											"value": "encrypted-share"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Complete share",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 202\", () => {",
+											"    pm.response.to.have.status(202);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares/:id/complete",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares",
+										":id",
+										"complete"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "encrypted-share"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get share token",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 200\", () => {",
+											"    pm.response.to.have.status(200);",
+											"});",
+											"",
+											"pm.test(\"Wrapped encryption key cookie is set\", () => {",
+											"    pm.expect(pm.cookies.has(\"share_encrypted-share_enc\")).to.be.true;",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares/:id/token",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares",
+										":id",
+										"token"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "encrypted-share"
+										}
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"password\": \"share-password\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get file - Decrypted",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 200\", () => {",
+											"    pm.response.to.have.status(200);",
+											"});",
+											"",
+											"pm.test(\"File content survives the encryption round trip\", () => {",
+											"    pm.expect(pm.response.text()).to.be.equal(\"data:application/octet-stream;base64,VGhpcyBpcyBhIHRlc3QgZmlsZWQgdXNlZCBmb3IgdXBsb2FkaW5nIGluIHRoZSBzeXN0ZW0gdGVzdC4=\");",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares/:shareId/files/:fileId",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares",
+										":shareId",
+										"files",
+										":fileId"
+									],
+									"variable": [
+										{
+											"key": "shareId",
+											"value": "encrypted-share"
+										},
+										{
+											"key": "fileId",
+											"value": "{{encryptedFileId}}"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Negative",
+					"item": [
+						{
+							"name": "Create encrypted share - Without password",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", () => {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"id\": \"encrypted-no-password\",\n    \"expiration\": \"1-day\",\n    \"recipients\": [],\n    \"security\": {},\n    \"encrypted\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get zip - Not available for encrypted shares",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", () => {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares/:shareId/files/zip",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares",
+										":shareId",
+										"files",
+										"zip"
+									],
+									"variable": [
+										{
+											"key": "shareId",
+											"value": "encrypted-share"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Update share - Password can not be changed",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", () => {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"url": {
+									"raw": "{{API_URL}}/shares/:id",
+									"host": [
+										"{{API_URL}}"
+									],
+									"path": [
+										"shares",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "encrypted-share"
+										}
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"security\": {\n        \"password\": \"another-password\"\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
 		}
 	],
 	"event": [
@@ -1259,6 +1650,11 @@
 		{
 			"key": "API_URL",
 			"value": "http://localhost:8080/api",
+			"type": "string"
+		},
+		{
+			"key": "encryptedFileId",
+			"value": "",
 			"type": "string"
 		}
 	]

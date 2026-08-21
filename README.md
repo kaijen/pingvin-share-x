@@ -19,6 +19,7 @@ Pingvin Share X is a fork of [Pingvin Share](https://github.com/stonith404/pingv
 - Unlimited file size (restricted only by disk space)
 - Set an expiration date for shares
 - Secure shares with visitor limits and passwords
+- Optional AES-256 encryption of stored files, with a key derived from the share password
 - Email recipients
 - Reverse shares
 - OIDC and LDAP authentication

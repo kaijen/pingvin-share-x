@@ -12,6 +12,7 @@ Pingvin Share X is a self-hosted file sharing platform and an alternative for We
 - Unlimited file size (restricted only by disk space)
 - Set an expiration date for shares
 - Secure shares with visitor limits and passwords
+- Optional AES-256 encryption of stored files, with a key derived from the share password
 - Email recipients
 - Integration with ClamAV for security scans
 

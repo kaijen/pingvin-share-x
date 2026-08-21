@@ -10,6 +10,8 @@ ClamAV is used to scan shares for malicious files and remove them if found.
 
 Please note that ClamAV needs a lot of [resources](https://docs.clamav.net/manual/Installing/Docker.html#memory-ram-requirements).
 
+Note that the files of [encrypted shares](../features/encrypted-shares.md) are **not** scanned: they are stored AES-256 encrypted and the backend does not keep the key, so there is no plaintext to scan after the upload has completed.
+
 ### Docker
 
 If you are already running ClamAV elsewhere, you can specify the `CLAMAV_HOST` environment variable to point to that instance.

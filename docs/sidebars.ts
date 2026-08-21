@@ -48,6 +48,16 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Features",
+      items: [
+        {
+          type: "doc",
+          id: "features/encrypted-shares",
+        },
+      ],
+    },
+    {
+      type: "category",
       label: "Helping Out",
       items: [
         {
